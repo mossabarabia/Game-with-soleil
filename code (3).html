@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shooting Game</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script>
+        // Setup Scene, Camera, and Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create a gun
+        const gunGeometry = new THREE.BoxGeometry(0.5, 0.2, 0.1);
+        const gunMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+        const gun = new THREE.Mesh(gunGeometry, gunMaterial);
+        gun.position.set(0, -0.5, -1);
+        scene.add(gun);
+
+        // Create a target
+        const targetGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+        const targetMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const target = new THREE.Mesh(targetGeometry, targetMaterial);
+        target.position.set(Math.random() * 2 - 1, Math.random() * 2 - 1, -5);
+        scene.add(target);
+
+        // Create Physics World
+        const world = new CANNON.World();
+        world.gravity.set(0, 0, 0);
+
+        // Gun Physics
+        const gunBody = new CANNON.Body({
+            mass: 1,
+            position: new CANNON.Vec3(0, -0.5, -1),
+        });
+        gunBody.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.1, 0.05)));
+        world.addBody(gunBody);
+
+        // Target Physics
+        const targetBody = new CANNON.Body({
+            mass: 1,
+            position: new CANNON.Vec3(target.position.x, target.position.y, -5),
+        });
+        targetBody.addShape(new CANNON.Sphere(0.2));
+        world.addBody(targetBody);
+
+        // Shooting mechanics
+        function shoot() {
+            const bulletGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+            scene.add(bullet);
+
+            const bulletBody = new CANNON.Body({
+                mass: 0.1,
+                position: new CANNON.Vec3(gun.position.x, gun.position.y, gun.position.z),
+                velocity: new CANNON.Vec3(0, 0, -10),
+            });
+            bulletBody.addShape(new CANNON.Sphere(0.1));
+            world.addBody(bulletBody);
+
+            function updateBullet() {
+                bullet.position.copy(bulletBody.position);
+                bullet.quaternion.copy(bulletBody.quaternion);
+
+                // Check for collision with target
+                if (bulletBody.position.distanceTo(targetBody.position) < 0.3) {
+                    scene.remove(bullet);
+                    world.removeBody(bulletBody);
+                    target.position.set(Math.random() * 2 - 1, Math.random() * 2 - 1, -5); // Move target
+                    targetBody.position.set(target.position.x, target.position.y, -5);
+                }
+
+                if (bullet.position.z < -10) {
+                    scene.remove(bullet);
+                    world.removeBody(bulletBody);
+                }
+
+                requestAnimationFrame(updateBullet);
+            }
+            updateBullet();
+        }
+
+        // Camera Position
+        camera.position.z = 5;
+
+        // Mouse controls
+        document.addEventListener('mousemove', (event) => {
+            const x = (event.clientX / window.innerWidth) * 2 - 1;
+            const y = -(event.clientY / window.innerHeight) * 2 + 1;
+            gun.position.set(x, y, -1);
+        });
+
+        // Controls
+        window.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') shoot();
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Sync Three.js and Cannon.js positions
+            gun.position.copy(gunBody.position);
+            gun.quaternion.copy(gunBody.quaternion);
+
+            target.position.copy(targetBody.position);
+            target.quaternion.copy(targetBody.quaternion);
+
+            world.step(1 / 60);
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
